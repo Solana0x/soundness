@@ -1,0 +1,46 @@
+name: Generate Key Pair
+on:
+  workflow_dispatch:
+jobs:
+  generate-keys:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Update system
+      run: sudo apt update && sudo apt upgrade -y
+    
+    - name: Install Rust
+      run: |
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        source "$HOME/.cargo/env"
+    
+    - name: Install soundness-cli
+      run: |
+        # Verbose installation with error checking
+        curl -sSL https://raw.githubusercontent.com/soundnesslabs/soundness-layer/main/soundnessup/install | bash
+        
+        # Explicitly check installation
+        if [ ! -f "$HOME/.soundness/bin/soundnessup" ]; then
+          echo "Soundness CLI installation failed"
+          exit 1
+        fi
+        
+        # Add to PATH for current session and future steps
+        echo "$HOME/.soundness/bin" >> $GITHUB_PATH
+    
+    - name: Generate keys
+      run: |
+        # Use command without full path, relying on PATH setup
+        soundnessup install
+        soundnessup update
+        
+        # Use expect to automate key generation with enter key presses
+        sudo apt-get install -y expect
+        
+        expect << EOF
+        spawn soundness-cli generate-key --name my-key
+        expect "Enter password for secret key:"
+        send "\r"
+        expect "Confirm password:"
+        send "\r"
+        expect eof
+        EOF
