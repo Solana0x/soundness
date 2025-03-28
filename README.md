@@ -1,5 +1,7 @@
 # Soundness Key Generation GitHub Workflow
 
+#MAKE SURE TO COPY THE github/workflows/generate-key.yml code and create your own PRIVATE REPO ! and run the code there in the workflow else in the PUBLIC repo anyone else can see the LOGS [Simply COPY the code of the workflow part and run it in your own private repo]
+
 ![image](https://github.com/user-attachments/assets/976de52f-a5ba-4b47-928d-1b5dfb2f185c)
 
 ## Overview
