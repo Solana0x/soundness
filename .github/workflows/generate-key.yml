@@ -1,10 +1,40 @@
 name: Generate Key Pair
 on:
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Secure environment for key generation'
+        required: true
+        type: environment
+
+permissions:
+  contents: write
+  id-token: write
+
 jobs:
   generate-keys:
     runs-on: ubuntu-latest
+    environment: 
+      name: ${{ inputs.environment }}
     steps:
+    - name: Check Repository Owner
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Get the repository owner
+        OWNER=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+          "https://api.github.com/repos/$GITHUB_REPOSITORY" | \
+          jq -r .owner.login)
+        
+        # Get the actor who triggered the workflow
+        ACTOR="${{ github.actor }}"
+        
+        # Compare owner with actor
+        if [ "$OWNER" != "$ACTOR" ]; then
+          echo "Error: Only repository owner can run this workflow"
+          exit 1
+        fi
+    
     - name: Update system
       run: sudo apt update && sudo apt upgrade -y
     
@@ -15,32 +45,40 @@ jobs:
     
     - name: Install soundness-cli
       run: |
-        # Verbose installation with error checking
         curl -sSL https://raw.githubusercontent.com/soundnesslabs/soundness-layer/main/soundnessup/install | bash
         
-        # Explicitly check installation
         if [ ! -f "$HOME/.soundness/bin/soundnessup" ]; then
           echo "Soundness CLI installation failed"
           exit 1
         fi
         
-        # Add to PATH for current session and future steps
         echo "$HOME/.soundness/bin" >> $GITHUB_PATH
     
     - name: Generate keys
+      env:
+        # Store the key password as a masked GitHub secret
+        KEY_PASSWORD: ${{ secrets.KEY_GENERATION_PASSWORD }}
       run: |
-        # Use command without full path, relying on PATH setup
-        soundnessup install
-        soundnessup update
-        
-        # Use expect to automate key generation with enter key presses
         sudo apt-get install -y expect
         
         expect << EOF
         spawn soundness-cli generate-key --name my-key
         expect "Enter password for secret key:"
-        send "\r"
+        send "$KEY_PASSWORD\r"
         expect "Confirm password:"
-        send "\r"
+        send "$KEY_PASSWORD\r"
         expect eof
         EOF
+    
+    - name: Secure Key Storage
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Additional security measures to protect generated keys
+        mkdir -p .github/keys
+        chmod 600 .github/keys
+        
+        # Optional: Encrypt keys before committing
+        gpg --symmetric --batch --yes \
+            --passphrase "${{ secrets.KEY_ENCRYPTION_PASSWORD }}" \
+            .github/keys/my-key
